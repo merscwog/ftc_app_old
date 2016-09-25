@@ -1,2 +1,9 @@
 include ':FtcRobotController'
 include ':TeamCode'
+
+import groovy.io.FileType
+
+def parentDir = new File(settingsDir, '..')
+parentDir.eachFileMatch(FileType.DIRECTORIES, ~/[Tt]eam([0-9])+/) { teamDir ->
+    includeFlat teamDir.name
+}
