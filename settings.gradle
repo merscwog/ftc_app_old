@@ -1,9 +1,73 @@
 include ':FtcRobotController'
-include ':TeamCode'
 
-import groovy.io.FileType
+settings.extensions.create('ftc', FtcSettings, settings)
 
-def parentDir = new File(settingsDir, '..')
-parentDir.eachFileMatch(FileType.DIRECTORIES, ~/[Tt]eam([0-9])+/) { teamDir ->
-    includeFlat teamDir.name
+File ftcConfig = new File(rootDir.parent, 'ftc-config.gradle')
+if (ftcConfig.exists()) {
+  apply from: ftcConfig
+}
+
+if (settings.includeDefaultTeamModule) {
+  include ':TeamCode'
+}
+
+import static groovy.io.FileType.DIRECTORIES
+
+if (settings.autoSearchForTeamModules || settings.autoSearchForTeamCode) {
+  File parentDir = rootDir.parentFile
+  String pattern = settings.dirNameSearchPattern
+
+  parentDir.eachFileMatch(DIRECTORIES, ~pattern) { File teamDir ->
+    if (settings.autoSearchForTeamModules &&
+	new File(teamDir, 'build.gradle').exists()) {
+      includeFlat teamDir.name
+      logger.info "Adding module ${teamDir.name}"
+    }
+    else if ((settings.includeDefaultTeamModule &&
+	      settings.autoSearchForTeamCode)) {
+
+      File sourcesRoot = teamDir
+      File possibleSourcesRoot = new File(teamDir, 'src/main/java')
+      if (possibleSourcesRoot.exists()) {
+	sourcesRoot = possibleSourcesRoot
+      }
+
+      settings.gradle.externalSourceFilePaths << sourcesRoot.canonicalPath
+      logger.info "Adding external sourceSet dir: ${sourcesRoot.canonicalPath}"
+    }
+    else {
+      logger.info "Skipping external directory: ${teamDir.path}"
+    }
+  }
+}
+
+class FtcSettings {
+  final Settings settings
+
+  FtcSettings(final Settings settings) {
+    this.settings = settings
+    this.settings.ext.includeDefaultTeamModule = true
+    this.settings.ext.autoSearchForTeamModules = true
+    this.settings.ext.autoSearchForTeamCode = true
+    this.settings.ext.dirNameSearchPattern = /[Tt]eam([0-9])+/
+    this.settings.gradle.ext.externalSourceFilePaths = []
+  }
+
+  void disableDefaultTeamModule() {
+    settings.includeDefaultTeamModule = false
+  }
+
+  void disableSearchForExternalTeamModulesByPattern() {
+    settings.autoSearchForTeamModules = false
+  }
+
+  void disableSearchForExternalSourceSetsByPattern() {
+    this.settings.ext.autoSearchForTeamCode = false
+  }
+
+  void setExternalDirectoryNameSearchPattern(String newPattern) {
+    if (newPattern) {
+      settings.dirNameSearchPattern = newPattern
+    }
+  }
 }

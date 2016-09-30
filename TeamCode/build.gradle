@@ -13,3 +13,8 @@
 
 // Include common definitions from above.
 apply from: rootProject.file('build.common.gradle')
+
+gradle.externalSourceFilePaths?.each { String fullPath ->
+  android.sourceSets.main.java.srcDir fullPath
+}
+
