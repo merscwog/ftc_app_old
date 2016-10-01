@@ -20,25 +20,25 @@ if (settings.autoSearchForTeamModules || settings.autoSearchForTeamCode) {
   parentDir.eachFileMatch(DIRECTORIES, ~pattern) { File teamDir ->
     if (settings.autoSearchForTeamModules &&
 	new File(teamDir, 'build.gradle').exists()) {
-      includeFlat teamDir.name
+
+      ftc.addExternalModule(teamDir.name, teamDir.canonicalPath)
       logger.info "Adding module ${teamDir.name}"
     }
     else if ((settings.includeDefaultTeamModule &&
 	      settings.autoSearchForTeamCode)) {
 
-      File sourcesRoot = teamDir
-      File possibleSourcesRoot = new File(teamDir, 'src/main/java')
-      if (possibleSourcesRoot.exists()) {
-	sourcesRoot = possibleSourcesRoot
-      }
-
-      settings.gradle.externalSourceFilePaths << sourcesRoot.canonicalPath
+      ftc.addExternalSourceSet(teamDir)
       logger.info "Adding external sourceSet dir: ${sourcesRoot.canonicalPath}"
     }
     else {
       logger.info "Skipping external directory: ${teamDir.path}"
     }
   }
+}
+
+settings.externalModulePaths.each { String projName, File projPath ->
+  include projName
+  project(projName).projectDir = projPath
 }
 
 class FtcSettings {
@@ -50,6 +50,7 @@ class FtcSettings {
     this.settings.ext.autoSearchForTeamModules = true
     this.settings.ext.autoSearchForTeamCode = true
     this.settings.ext.dirNameSearchPattern = /[Tt]eam([0-9])+/
+    this.settings.ext.externalModulePaths = [:]
     this.settings.gradle.ext.externalSourceFilePaths = []
   }
 
@@ -62,12 +63,43 @@ class FtcSettings {
   }
 
   void disableSearchForExternalSourceSetsByPattern() {
-    this.settings.ext.autoSearchForTeamCode = false
+    settings.autoSearchForTeamCode = false
   }
 
   void setExternalDirectoryNameSearchPattern(String newPattern) {
     if (newPattern) {
       settings.dirNameSearchPattern = newPattern
     }
+  }
+
+  void addExternalModule(String name) {
+    addExternalModule(name, name)
+  }
+
+  void addExternalModule(String name, String path) {
+    if (! name?.startsWith(':')) {
+      name = ":${name}"
+    }
+
+    def modulePath = new File(path)
+    if (! modulePath.isAbsolute()) {
+      modulePath = new File(settings.rootDir.parent, path)
+    }
+
+    settings.externalModulePaths[name] = modulePath
+  }
+
+  void addExternalSourceSet(String path) {
+    def sourceSetPath = new File(path)
+    if (! sourceSetPath.isAbsolute()) {
+      sourceSetPath = new File(settings.rootDir.parent, path)
+    }
+
+    File possibleSourcesRoot = new File(sourceSetPath, 'src/main/java')
+    if (possibleSourcesRoot.exists()) {
+      sourceSetPath = possibleSourcesRoot
+    }
+
+    settings.gradle.externalSourceFilePaths << sourceSetPath.canonicalPath
   }
 }
