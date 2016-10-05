@@ -11,10 +11,42 @@ if (settings.includeDefaultTeamModule) {
   include ':TeamCode'
 }
 
+import static groovy.io.FileType.FILES
 import static groovy.io.FileType.DIRECTORIES
 
+File parentDir = rootDir.parentFile
+
+if (settings.autoSearchByTokenFiles) {
+  def tokenFilePattern = ~/ftc-(module|source)\.gradle/
+
+  parentDir.traverse(type      : FILES,
+		     nameFilter: tokenFilePattern,
+		     maxDepth  : 2) {
+    File tokenFile ->
+      if (tokenFile.name.contains('module')) {
+	File moduleDir = tokenFile.parentFile
+	String moduleName = moduleDir.name
+
+	if (tokenFile.size() > 0) {
+	  tokenFile.withReader {
+	    String firstLineTrimmed = it.readLine().trim()
+	    if (firstLineTrimmed) {
+	      moduleName = firstLineTrimmed
+	    }
+	  }
+	}
+
+	ftc.addExternalModule(moduleName, moduleDir.canonicalPath)
+	logger.info "Adding module '${moduleName}' from tokenFile: ${tokenFile}"
+      }
+      else {
+	ftc.addExternalSourceSet(tokenFile.parent.canonicalPath)
+	logger.info "Adding sourceSet from tokenFile: ${tokenFile}"
+      }
+  }
+}
+
 if (settings.autoSearchForTeamModules || settings.autoSearchForTeamCode) {
-  File parentDir = rootDir.parentFile
   String pattern = settings.dirNameSearchPattern
 
   parentDir.eachFileMatch(DIRECTORIES, ~pattern) { File teamDir ->
@@ -47,8 +79,9 @@ class FtcSettings {
   FtcSettings(final Settings settings) {
     this.settings = settings
     this.settings.ext.includeDefaultTeamModule = true
-    this.settings.ext.autoSearchForTeamModules = true
-    this.settings.ext.autoSearchForTeamCode = true
+    this.settings.ext.autoSearchForTeamModules = false
+    this.settings.ext.autoSearchForTeamCode = false
+    this.settings.ext.autoSearchByTokenFiles = true
     this.settings.ext.dirNameSearchPattern = /[Tt]eam([0-9])+/
     this.settings.ext.externalModulePaths = [:]
     this.settings.gradle.ext.externalSourceFilePaths = []
@@ -58,12 +91,16 @@ class FtcSettings {
     settings.includeDefaultTeamModule = false
   }
 
-  void disableSearchForExternalTeamModulesByPattern() {
-    settings.autoSearchForTeamModules = false
+  void enableSearchForExternalTeamModulesByPattern() {
+    settings.autoSearchForTeamModules = true
   }
 
-  void disableSearchForExternalSourceSetsByPattern() {
-    settings.autoSearchForTeamCode = false
+  void enableSearchForExternalSourceSetsByPattern() {
+    settings.autoSearchForTeamCode = true
+  }
+
+  void disableSearchForExternalsByTokenFiles() {
+    settings.autoSearchByTokenFiles = false
   }
 
   void setExternalDirectoryNameSearchPattern(String newPattern) {
