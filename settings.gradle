@@ -58,17 +58,17 @@ import static groovy.io.FileType.DIRECTORIES
 
 File parentDir = rootDir.parentFile
 
-if (settings.autoSearchByTokenFiles) {
-  def tokenFilePattern = ~/ftc-module.gradle/
+if (settings.autoSearchByModuleFiles) {
+  def moduleFilePattern = ~/ftc-module.gradle/
 
   parentDir.traverse(type      : FILES,
-		     nameFilter: tokenFilePattern,
+		     nameFilter: moduleFilePattern,
 		     maxDepth  : 2) {
-    File tokenFile ->
-      logger.info "Parsing tokenFile: ${tokenFile}"
+    File moduleFile ->
+      logger.info "Parsing moduleFile: ${moduleFile}"
 
       ConfigSlurper slurper = new ConfigSlurper()
-      ConfigObject config = slurper.parse(tokenFile.text)
+      ConfigObject config = slurper.parse(moduleFile.text)
 
       validateConfigOptions(config)
 
@@ -80,20 +80,20 @@ if (settings.autoSearchByTokenFiles) {
       String type = config.ftc.type ?: 'external'
 
       if (type == 'source') {
-	ftc.addExternalSourceSet(tokenFile.parentFile.canonicalPath)
-	logger.info 'Adding external sourceSet from tokenFile'
+	ftc.addExternalSourceSet(moduleFile.parentFile.canonicalPath)
+	logger.info 'Adding external sourceSet from moduleFile'
       }
       else {
-	File moduleDir = tokenFile.parentFile
+	File moduleDir = moduleFile.parentFile
 	String moduleName = config.ftc.name ?: moduleDir.name
 
 	if (type == 'external') {
 	  ftc.addExternalModule(moduleName, moduleDir.canonicalPath)
-	  logger.info "Adding external module '${moduleName}' from tokenFile"
+	  logger.info "Adding external module '${moduleName}' from moduleFile"
 	}
 	else if (type == 'injected') {
 	  ftc.addInjectedModule(moduleName, moduleDir.canonicalPath)
-	  logger.info "Adding injected module '${moduleName} from tokenFile"
+	  logger.info "Adding injected module '${moduleName} from moduleFile"
 	}
       }
   }
@@ -134,7 +134,7 @@ class FtcSettings {
     this.settings.ext.includeDefaultTeamModule = true
     this.settings.ext.autoSearchForTeamModules = false
     this.settings.ext.autoSearchForTeamCode = false
-    this.settings.ext.autoSearchByTokenFiles = true
+    this.settings.ext.autoSearchByModuleFiles = true
     this.settings.ext.dirNameSearchPattern = /[Tt]eam([0-9])+/
     this.settings.ext.externalModulePaths = [:]
     this.settings.gradle.ext.externalSourceFilePaths = []
@@ -153,8 +153,8 @@ class FtcSettings {
     settings.autoSearchForTeamCode = true
   }
 
-  void disableSearchForExternalsByTokenFiles() {
-    settings.autoSearchByTokenFiles = false
+  void disableSearchForExternalsByModulesFiles() {
+    settings.autoSearchByModuleFiles = false
   }
 
   void setExternalDirectoryNameSearchPattern(String newPattern) {
