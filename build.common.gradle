@@ -91,6 +91,20 @@ android {
     sourceSets.main {
         jni.srcDirs = []
         jniLibs.srcDir rootProject.file('libs')
+
+	// Look for necessary android-specific files/paths
+	// TeamCode not being referenced as project so it could be disabled
+	// Might be better to have template project dir that TeamCode
+	// also would pull from by default
+	String manifestPath = 'src/main/AndroidManifest.xml'
+	if (! file(manifestPath).exists()) {
+	  manifest.srcFile rootProject.file("TeamCode/${manifestPath}")
+	}
+
+	String resPath = 'src/main/res'
+	if (! file(resPath).exists()) {
+	  res.srcDirs rootProject.file("TeamCode/${resPath}")
+	}
     }
 }
 
@@ -100,4 +114,10 @@ repositories {
     }
 }
 
-apply from: 'build.release.gradle'
+// Prefer file in local project, but apply template file otherwise
+def baseDependenciesFile = file('build.release.gradle')
+if (! baseDependenciesFile.exists()) {
+  baseDependenciesFile = rootProject.file('TeamCode/build.release.gradle')
+}
+
+apply from: baseDependenciesFile

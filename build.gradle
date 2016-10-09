@@ -12,4 +12,6 @@ buildscript {
     }
 }
 
-
+gradle.externalInjectedModules.each { String projName ->
+  apply from: rootProject.file('build.common.gradle'), to: project(projName)
+}

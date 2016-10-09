@@ -11,37 +11,90 @@ if (settings.includeDefaultTeamModule) {
   include ':TeamCode'
 }
 
+def validateConfigOptions(ConfigObject config) {
+  def extraFields = config.keySet() - 'ftc'
+  if (extraFields) {
+    throw new GradleException("Invalid content: ${extraFields}")
+  }
+
+  def ftcContents = config.get('ftc')
+  if (ftcContents) {
+    def extraContent = ftcContents.keySet() - ['type', 'name', 'enabled']
+
+    if (extraContent) {
+      throw new GradleException("Invalid content: ${extraContent}")
+    }
+  }
+
+  def moduleType = config.ftc.type
+  if (moduleType && ! ['injected', 'source', 'external'].contains(moduleType)) {
+    throw new GradleException("""\
+Invalid module type: ${moduleType}
+Valid values are: 'injected', 'source' and 'external'""".stripMargin())
+  }
+}
+
+Boolean convertToBoolean(thing) {
+  Boolean result = true
+
+  if (thing instanceof Boolean) {
+    result = thing // Take boolean value in the raw
+  }
+  else if (thing instanceof String) {
+    result = thing.toBoolean()
+  }
+  else if ((thing instanceof Map) && (thing.isEmpty())) {
+    result = true // This is special config option case
+  }
+  else if (thing) {
+    result = thing as Boolean
+  }
+
+  result
+}
+
 import static groovy.io.FileType.FILES
 import static groovy.io.FileType.DIRECTORIES
 
 File parentDir = rootDir.parentFile
 
 if (settings.autoSearchByTokenFiles) {
-  def tokenFilePattern = ~/ftc-(module|source)\.gradle/
+  def tokenFilePattern = ~/ftc-module.gradle/
 
   parentDir.traverse(type      : FILES,
 		     nameFilter: tokenFilePattern,
 		     maxDepth  : 2) {
     File tokenFile ->
-      if (tokenFile.name.contains('module')) {
-	File moduleDir = tokenFile.parentFile
-	String moduleName = moduleDir.name
+      logger.info "Parsing tokenFile: ${tokenFile}"
 
-	if (tokenFile.size() > 0) {
-	  tokenFile.withReader {
-	    String firstLineTrimmed = it.readLine().trim()
-	    if (firstLineTrimmed) {
-	      moduleName = firstLineTrimmed
-	    }
-	  }
-	}
+      ConfigSlurper slurper = new ConfigSlurper()
+      ConfigObject config = slurper.parse(tokenFile.text)
 
-	ftc.addExternalModule(moduleName, moduleDir.canonicalPath)
-	logger.info "Adding module '${moduleName}' from tokenFile: ${tokenFile}"
+      validateConfigOptions(config)
+
+      if (! convertToBoolean(config.ftc.enabled)) {
+	return
+      }
+
+      // NOTE: This is default type when not specified
+      String type = config.ftc.type ?: 'external'
+
+      if (type == 'source') {
+	ftc.addExternalSourceSet(tokenFile.parentFile.canonicalPath)
+	logger.info 'Adding external sourceSet from tokenFile'
       }
       else {
-	ftc.addExternalSourceSet(tokenFile.parent.canonicalPath)
-	logger.info "Adding sourceSet from tokenFile: ${tokenFile}"
+	File moduleDir = tokenFile.parentFile
+	String moduleName = config.ftc.name ?: moduleDir.name
+
+	if (type == 'external') {
+	  ftc.addExternalModule(moduleName, moduleDir.canonicalPath)
+	  logger.info "Adding external module '${moduleName}' from tokenFile"
+	}
+	else if (type == 'injected') {
+	  ftc.addInjectedModule(moduleName, moduleDir.canonicalPath)
+	  logger.info "Adding injected module '${moduleName} from tokenFile"
+	}
       }
   }
 }
@@ -85,6 +138,7 @@ class FtcSettings {
     this.settings.ext.dirNameSearchPattern = /[Tt]eam([0-9])+/
     this.settings.ext.externalModulePaths = [:]
     this.settings.gradle.ext.externalSourceFilePaths = []
+    this.settings.gradle.ext.externalInjectedModules = []
   }
 
   void disableDefaultTeamModule() {
@@ -124,6 +178,19 @@ class FtcSettings {
     }
 
     settings.externalModulePaths[name] = modulePath
+  }
+
+  void addInjectedModule(String name) {
+    addInjectedModule(name, name)
+  }
+
+  void addInjectedModule(String name, String path) {
+    if (! name?.startsWith(':')) {
+      name = ":${name}"
+    }
+
+    addExternalModule(name, path)
+    settings.gradle.externalInjectedModules << name
   }
 
   void addExternalSourceSet(String path) {
